@@ -1,0 +1,53 @@
+- hosts: localhost
+  connection: local
+  gather_facts: False
+
+  tasks:
+    - name: make one instance
+      ec2: image=ami-0a63f96e85105c6d3
+        instance_type=t2.micro
+        instance_tags='{ "Name":"Test" }'
+        keypair=my-key
+        region=us-east-2
+        group=EC2SecirityGroup1
+        wait=true
+      register: ec2_info
+
+    - debug: var=item.public_ip
+      with_items: "{{ ec2_info.instances }}"
+
+    - add_host: hostname={{ item.public_ip }}  groupname=ec2hosts
+      with_items: "{{ ec2_info.instances }}"
+
+    - name: wait for instances to listen on port:22
+      wait_for:
+        state=started
+        host={{ item.public_ip }}
+        port=22
+      with_items: "{{ ec2_info.instances }}"
+
+    - name: Write the new ec2 instance host key to known hosts
+      shell: "ssh-keyscan -H {{ item.public_ip }} >> ~/.ssh/known_hosts"
+      with_items: "{{ ec2_info.instances }}"
+
+- hosts: ec2hosts
+  user: ubuntu
+  become: yes
+  vars:
+    ansible_python_interpreter: /usr/bin/python3
+
+  tasks:
+    - name: Ensure packages is present
+      apt:
+        pkg:
+          - nginx
+
+    - name: Copy html file
+      copy:
+        src: index.nginx-debian.html
+        dest: /var/www/html/index.nginx-debian.html
+
+    - name: Restart nginx
+      service:
+        name: nginx
+        state: restarted
