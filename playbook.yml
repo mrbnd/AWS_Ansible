@@ -13,9 +13,6 @@
         wait=true
       register: ec2_info
 
-    - debug: var=item.public_ip
-      with_items: "{{ ec2_info.instances }}"
-
     - add_host: hostname={{ item.public_ip }}  groupname=ec2hosts
       with_items: "{{ ec2_info.instances }}"
 
